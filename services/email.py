@@ -1,11 +1,11 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 import os
-from typing import List
-
 # Determine port and SSL settings dynamically
 mail_port = int(os.getenv("MAIL_PORT", 465))
 use_ssl = (mail_port == 465)
+
+print(f"📧 EMAIL CONFIG: Server={os.getenv('MAIL_SERVER')}, Port={mail_port}, SSL={use_ssl}, User={os.getenv('MAIL_USERNAME')}")
 
 conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
