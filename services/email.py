@@ -18,6 +18,13 @@ socket.getaddrinfo = new_getaddrinfo
 mail_port = int(os.getenv("MAIL_PORT", 587))
 use_ssl = (mail_port == 465)
 
+# DEBUG: Prove monkeypatch works
+try:
+    info = socket.getaddrinfo("smtp.gmail.com", mail_port)
+    print(f"🕵️ NETWORK DEBUG: Resolved IPs for smtp.gmail.com: {info}")
+except Exception as e:
+    print(f"🕵️ NETWORK DEBUG: DNS Resolution failed: {e}")
+
 conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
@@ -27,7 +34,8 @@ conf = ConnectionConfig(
     MAIL_STARTTLS=not use_ssl,
     MAIL_SSL_TLS=use_ssl,
     USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
+    VALIDATE_CERTS=True,
+    TIMEOUT=120 # Boost timeout to 2 minutes
 )
 
 async def send_email(email_to: EmailStr, subject: str, message_text: str):
