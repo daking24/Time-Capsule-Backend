@@ -1,25 +1,33 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 import os
+import socket
+
+# MONKEYPATCH: Force IPv4
+# Render/Heroku sometimes fail to route IPv6 to Gmail correctly, causing timeouts.
+# We wrap getaddrinfo to filter out IPv6 results, forcing the app to use IPv4.
+old_getaddrinfo = socket.getaddrinfo
+
+def new_getaddrinfo(*args, **kwargs):
+    responses = old_getaddrinfo(*args, **kwargs)
+    return [response for response in responses if response[0] == socket.AF_INET]
+
+socket.getaddrinfo = new_getaddrinfo
+
 # Determine port and SSL settings dynamically
-# Reverting to 587 Default (STARTTLS) as 465 timed out.
 mail_port = int(os.getenv("MAIL_PORT", 587))
 use_ssl = (mail_port == 465)
-
-print(f"📧 EMAIL CONFIG: Server={os.getenv('MAIL_SERVER', 'smtp.googlemail.com')}, Port={mail_port}, SSL={use_ssl}, User={os.getenv('MAIL_USERNAME')}")
 
 conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_FROM=os.getenv("MAIL_FROM"),
     MAIL_PORT=mail_port,
-    # Switching to googlemail.com to see if DNS resolution works better
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.googlemail.com"),
-    MAIL_STARTTLS=not use_ssl, # True for 587
-    MAIL_SSL_TLS=use_ssl,      # True for 465
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+    MAIL_STARTTLS=not use_ssl,
+    MAIL_SSL_TLS=use_ssl,
     USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True,
-    TIMEOUT=60 # Explicit timeout
+    VALIDATE_CERTS=True
 )
 
 async def send_email(email_to: EmailStr, subject: str, message_text: str):
