@@ -2,21 +2,24 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 import os
 # Determine port and SSL settings dynamically
-mail_port = int(os.getenv("MAIL_PORT", 465))
+# Reverting to 587 Default (STARTTLS) as 465 timed out.
+mail_port = int(os.getenv("MAIL_PORT", 587))
 use_ssl = (mail_port == 465)
 
-print(f"📧 EMAIL CONFIG: Server={os.getenv('MAIL_SERVER')}, Port={mail_port}, SSL={use_ssl}, User={os.getenv('MAIL_USERNAME')}")
+print(f"📧 EMAIL CONFIG: Server={os.getenv('MAIL_SERVER', 'smtp.googlemail.com')}, Port={mail_port}, SSL={use_ssl}, User={os.getenv('MAIL_USERNAME')}")
 
 conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
     MAIL_FROM=os.getenv("MAIL_FROM"),
     MAIL_PORT=mail_port,
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=not use_ssl, # True if 587
-    MAIL_SSL_TLS=use_ssl,      # True if 465
+    # Switching to googlemail.com to see if DNS resolution works better
+    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.googlemail.com"),
+    MAIL_STARTTLS=not use_ssl, # True for 587
+    MAIL_SSL_TLS=use_ssl,      # True for 465
     USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
+    VALIDATE_CERTS=True,
+    TIMEOUT=60 # Explicit timeout
 )
 
 async def send_email(email_to: EmailStr, subject: str, message_text: str):
