@@ -1,65 +1,37 @@
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
-from pydantic import EmailStr
 import os
-import socket
+import resend
+from pydantic import EmailStr
 
-# MONKEYPATCH: Force IPv4
-# Render/Heroku sometimes fail to route IPv6 to Gmail correctly, causing timeouts.
-# We wrap getaddrinfo to filter out IPv6 results, forcing the app to use IPv4.
-old_getaddrinfo = socket.getaddrinfo
-
-def new_getaddrinfo(*args, **kwargs):
-    responses = old_getaddrinfo(*args, **kwargs)
-    return [response for response in responses if response[0] == socket.AF_INET]
-
-socket.getaddrinfo = new_getaddrinfo
-
-# Determine port and SSL settings dynamically
-mail_port = int(os.getenv("MAIL_PORT", 587))
-use_ssl = (mail_port == 465)
-
-# DEBUG: Prove monkeypatch works
-try:
-    info = socket.getaddrinfo("smtp.gmail.com", mail_port)
-    print(f"🕵️ NETWORK DEBUG: Resolved IPs for smtp.gmail.com: {info}")
-except Exception as e:
-    print(f"🕵️ NETWORK DEBUG: DNS Resolution failed: {e}")
-
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
-    MAIL_FROM=os.getenv("MAIL_FROM"),
-    MAIL_PORT=mail_port,
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=not use_ssl,
-    MAIL_SSL_TLS=use_ssl,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True,
-    TIMEOUT=120 # Boost timeout to 2 minutes
-)
+# Initialize Resend with API Key from Environment
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 async def send_email(email_to: EmailStr, subject: str, message_text: str):
-    """Generic email sender"""
-    html = f"""
-    <div style="font-family: sans-serif; padding: 20px;">
-        <h2>{subject}</h2>
-        <p>{message_text}</p>
-    </div>
-    """
-    message = MessageSchema(
-        subject=subject,
-        recipients=[email_to],
-        body=html,
-        subtype=MessageType.html
-    )
-    fm = FastMail(conf)
-    await fm.send_message(message)
+    """Generic email sender using Resend"""
+    try:
+        html_content = f"""
+        <div style="font-family: sans-serif; padding: 20px;">
+            <h2>{subject}</h2>
+            <p>{message_text}</p>
+        </div>
+        """
+        
+        r = resend.Emails.send({
+            "from": "Time Capsule <onboarding@resend.dev>",
+            "to": email_to,
+            "subject": subject,
+            "html": html_content
+        })
+        print(f"📧 Resend API Response: {r}")
+        return r
+    except Exception as e:
+        print(f"❌ Resend API Error: {e}")
+        raise e
 
 async def send_time_capsule_email(email_to: EmailStr, content: str, media_url: str = None, media_type: str = "text"):
-    
+    """Sends the delivered time capsule email"""
     subject = "Your Time Capsule has arrived! 🕰️"
     
-    html = f"""
+    html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
@@ -158,24 +130,26 @@ async def send_time_capsule_email(email_to: EmailStr, content: str, media_url: s
     </body>
     </html>
     """
-
-    message = MessageSchema(
-        subject=subject,
-        recipients=[email_to],
-        body=html,
-        subtype=MessageType.html
-    )
-
-    fm = FastMail(conf)
-    await fm.send_message(message)
+    
+    try:
+        r = resend.Emails.send({
+            "from": "Time Capsule <onboarding@resend.dev>",
+            "to": email_to,
+            "subject": subject,
+            "html": html_content
+        })
+        print(f"📧 Resend API Response (Time Capsule): {r}")
+        return r
+    except Exception as e:
+        print(f"❌ Resend API Error: {e}")
+        # Build resilience: don't crash the scheduler if one email fails
+        pass 
 
 async def send_verification_email(email_to: EmailStr, code: str):
-    """
-    Sends a verification code email using the premium template.
-    """
+    """Sends the verification code"""
     subject = "🔑 Your Vault Access Code"
     
-    html = f"""
+    html_content = f"""
     <!DOCTYPE html>
     <html>
     <body style="font-family: 'Playfair Display', serif; background-color: #0f0f18; color: #d4af37; padding: 40px; text-align: center;">
@@ -191,12 +165,15 @@ async def send_verification_email(email_to: EmailStr, code: str):
     </html>
     """
     
-    message = MessageSchema(
-        subject=subject,
-        recipients=[email_to],
-        body=html,
-        subtype=MessageType.html
-    )
-
-    fm = FastMail(conf)
-    await fm.send_message(message)
+    try:
+        r = resend.Emails.send({
+            "from": "Time Capsule <onboarding@resend.dev>",
+            "to": email_to,
+            "subject": subject,
+            "html": html_content
+        })
+        print(f"📧 Resend API Response (Verification): {r}")
+        return r
+    except Exception as e:
+        print(f"❌ Resend API Error: {e}")
+        raise e

@@ -43,3 +43,4 @@ tzlocal==5.3.1
 urllib3==2.6.2
 uvicorn==0.40.0
 gunicorn==21.2.0
+resend==0.8.0
