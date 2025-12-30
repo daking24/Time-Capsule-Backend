@@ -13,6 +13,17 @@ async def lifespan(app: FastAPI):
 # Create Tables (Simple approach for MVP)
 Base.metadata.create_all(bind=engine)
 
+# AUTO-MIGRATION: Ensure verification_code column exists
+# (Since create_all doesn't add columns to existing tables)
+try:
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_code VARCHAR"))
+        conn.commit()
+        print("✅ Auto-migration: Checked/Added verification_code column.")
+except Exception as e:
+    print(f"⚠️ Auto-migration warning: {e}")
+
 app = FastAPI(
     title="Time Capsule API",
     description="Backend for Future Me Clone",

@@ -67,16 +67,18 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 async def request_magic_code(request: EmailRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # Generate 6-digit code
     code = ''.join(random.choices(string.digits, k=6))
-    magic_codes[request.email] = code
-    
-    # Check if user exists, if not, create them (auto-registration for SSO flow)
+
+    # Check if user exists, if not, create them (auto-registration)
     user = db.query(User).filter(User.email == request.email).first()
     if not user:
         # Create user with random password since they are using Code Auth
         temp_pass = get_password_hash(''.join(random.choices(string.ascii_letters, k=8)))
         user = User(email=request.email, hashed_password=temp_pass)
         db.add(user)
-        db.commit()
+    
+    # Store Code in DB (Persistent)
+    user.verification_code = code
+    db.commit()
 
     # Send Email
     background_tasks.add_task(send_verification_email, request.email, code)
@@ -86,15 +88,19 @@ async def request_magic_code(request: EmailRequest, background_tasks: Background
 
 @router.post("/verify-code", response_model=Token)
 def verify_magic_code(verify: CodeVerify, db: Session = Depends(get_db)):
-    if verify.email not in magic_codes or magic_codes[verify.email] != verify.code:
+    # Fetch user from DB
+    user = db.query(User).filter(User.email == verify.email).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+        
+    # Check DB code
+    if not user.verification_code or user.verification_code != verify.code:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     
-    # Code valid, clear it
-    del magic_codes[verify.email]
+    # Code valid, clear it to prevent reuse
+    user.verification_code = None
+    db.commit()
     
-    user = db.query(User).filter(User.email == verify.email).first()
-    if not user:
-         raise HTTPException(status_code=400, detail="User not found")
-
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
